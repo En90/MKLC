@@ -45,6 +45,7 @@ private:
 	ros::Publisher pose_pub;
 	
 	bool cam_info_received = false;
+	bool image_received = false;
 	CamInfo rs_intrin;
 	std::vector<Marker> markers_;
 	cv::Mat depth_image;
@@ -104,7 +105,7 @@ public:
 			else
 				std::cout << "invalid id" << std::endl;
 			
-			if (cam_info_received == true)
+			if (cam_info_received == true && image_received == true)
 			{
 				rs2_deproject_pixel_to_point(point_3d, rs_intrin, pixel_to_find, depth, name);
 				tf::StampedTransform transformstamped;
@@ -116,6 +117,7 @@ public:
 					poseMsg.header.stamp = curr_stamped;
 					pose_pub.publish(poseMsg);
 				}
+				image_received == false;
 			}
 			
 		}
@@ -125,6 +127,7 @@ public:
 	{
 		cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
 		depth_image = cv_ptr->image;
+		image_received = true;
 	}
 	
 	void Info_callback(const sensor_msgs::CameraInfo &msg)
