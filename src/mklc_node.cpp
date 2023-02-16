@@ -6,6 +6,8 @@
 
 #include <darknet_ros_msgs/BoundingBox.h>
 #include <darknet_ros_msgs/BoundingBoxes.h>
+#include <aruco_msgs/MarkerArray.h>
+#include <aruco_msgs/Marker.h>
 
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
@@ -43,6 +45,7 @@ private:
 	ros::Subscriber caminfo_sub;
 	image_transport::Subscriber image_sub;
 	ros::Publisher pose_pub;
+	ros::Publisher cake_pub;
 	
 	bool cam_info_received = false;
 	bool image_received = false;
@@ -60,6 +63,7 @@ public:
 		image_sub = it.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &Node::Image_callback, this);
 		caminfo_sub = nh.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &Node::Info_callback, this);
 		pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose",100);
+		cake_pub = nh.advertise<aruco_msgs::MarkerArray>("cakes",100);
 	}
 	
 	void Bbox_callback(const darknet_ros_msgs::BoundingBoxes &msg)
@@ -69,6 +73,7 @@ public:
 		int brown_count = 0;
 		int pink_count = 0;
 		int yellow_count = 0;
+		aruco_msgs::MarkerArray cakes;
 		for (std::size_t i = 0; i < bboxes.size(); i++)
 		{
 			/*
@@ -84,6 +89,8 @@ public:
 			float depth = depth_image.at<float>(pixel_to_find[1], pixel_to_find[0]);
 			//std::cout << depth << std::endl;
 			std::string name;
+			aruco_msgs::Marker marker;
+			marker.id = bboxes[i].id;
 			if (bboxes[i].id == 0)
 			{
 				brown_count++;
@@ -116,11 +123,17 @@ public:
 					poseMsg.header.frame_id = "world_frame";
 					poseMsg.header.stamp = curr_stamped;
 					pose_pub.publish(poseMsg);
+					//cake_pub
+					marker.pose.pose = poseMsg.pose;
+					cakes.markers.push_back(marker);				
 				}
-				image_received == false;
 			}
-			
 		}
+		if (cam_info_received == true && image_received == true)
+		{
+			cake_pub.publish(cakes);
+		}
+		image_received = false;
 	}
 
 	void Image_callback(const sensor_msgs::ImageConstPtr &msg)

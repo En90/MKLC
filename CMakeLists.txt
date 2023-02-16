@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   darknet_ros_msgs
+  aruco_msgs
   image_transport
   realsense2
   cv_bridge
@@ -165,6 +166,10 @@ add_executable(test_hellowrs src/test_hellowrs.cpp)
 target_link_libraries(test_hellowrs ${catkin_LIBRARIES})
 add_dependencies(test_hellowrs ${catkin_EXPORTED_TARGETS})
 target_link_libraries(test_hellowrs ${realsense2_LIBRARY})
+
+add_executable(cake_node src/cake_node.cpp)
+target_link_libraries(cake_node ${catkin_LIBRARIES})
+add_dependencies(cake_node ${catkin_EXPORTED_TARGETS})
 #############
 ## Install ##
 #############

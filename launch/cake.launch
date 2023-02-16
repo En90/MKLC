@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+  
+  <node pkg="mklc" type="cake_node" name="cake_node" output="screen">
+    <param name="sub1_topic" value="" />
+    <param name="sub2_topic" value="" />
+    <param name="sub3_topic" value="" />
+    <param name="subyolo_topic" value="" />
+    <param name="min_dist" value="0.08" />
+  </node>
+
+</launch>
