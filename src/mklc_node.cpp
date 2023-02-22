@@ -15,14 +15,6 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <string>
 
-class Marker
-{
-	public:
-		std::string frame;
-		int id;
-		cv::Point pt;
-};
-
 class CamInfo
 {
 	public:
@@ -50,7 +42,6 @@ private:
 	bool cam_info_received = false;
 	bool image_received = false;
 	CamInfo rs_intrin;
-	std::vector<Marker> markers_;
 	cv::Mat depth_image;
 	float point_3d[3];
 	tf::TransformListener _tfListener;
@@ -76,13 +67,6 @@ public:
 		aruco_msgs::MarkerArray cakes;
 		for (std::size_t i = 0; i < bboxes.size(); i++)
 		{
-			/*
-			Marker marker;
-			marker.pt = cv::Point((bboxes[i].xmin + bboxes[i].xmax) / 2, (bboxes[i].ymin+ bboxes[i].ymax) / 2);
-			marker.id = bboxes[i].id;
-			marker.frame = "marker";
-			markers_.push_back(marker);
-			*/
 			float pixel_to_find[2];
 			pixel_to_find[0] = (bboxes[i].xmin + bboxes[i].xmax)/2;
 			pixel_to_find[1] = (bboxes[i].ymin + bboxes[i].ymax)/2;
@@ -97,13 +81,13 @@ public:
 				name = "brown";
 				name.append(std::to_string(brown_count));
 			}
-			else if (bboxes[i].id == 1)
+			else if (bboxes[i].id == 4)
 			{
 				pink_count++;
 				name = "pink";
 				name.append(std::to_string(pink_count));
 			}
-			else if (bboxes[i].id == 2)
+			else if (bboxes[i].id == 5)
 			{
 				yellow_count++;
 				name = "yellow";

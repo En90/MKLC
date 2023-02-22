@@ -1,3 +1,4 @@
+
 #include <ros/ros.h>
 #include <vector>
 #include <cmath>
@@ -6,7 +7,7 @@
 #include <darknet_ros_msgs/BoundingBoxes.h>
 #include <aruco_msgs/MarkerArray.h>
 #include <aruco_msgs/Marker.h>
-
+#include <geometry_msgs/PoseArray.h>
 class Cake
 {
 	public:
@@ -43,7 +44,7 @@ class Interface
 			nh("~")
 		{
 			timer = nh.createTimer(ros::Duration(3), &Interface::pub_callback, this);
-			cakes_pub = nh.advertise<aruco_msgs::MarkerArray>("AllCakes", 100);
+			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("obstacle_position_array", 100);
 			nh.param<float>("min_dist", min_dist, 0.08);
 			if(nh.getParam("sub1_topic", sub1))
 			{
@@ -66,12 +67,13 @@ class Interface
 				std::cout << "init subyolo" << std::endl;
 			}
 		}
-		
+
 		void sub_callback(const aruco_msgs::MarkerArray &msg)
 		{
 			for (std::size_t i=0; i < msg.markers.size(); i++)
 			{
 				Cake cake;
+				cake.id = msg.markers[i].id;
 				cake.tx = msg.markers[i].pose.pose.position.x;
 				cake.ty = msg.markers[i].pose.pose.position.y;
 				cake.tz = msg.markers[i].pose.pose.position.z;
@@ -82,31 +84,45 @@ class Interface
 				CakeCandidate.push_back(cake);
 			}
 		}
-		
+
 		void pub_callback(const ros::TimerEvent& event)
 		{
 			if(cakes_pub.getNumSubscribers()!=0)
 			{
 				filtercandidate(CakeCandidate, min_dist);
 				std::size_t total = CakeCandidate.size();
-				std::cout << total << std::endl;
+				std::cout << "total: " << total << std::endl;
+				geometry_msgs::PoseArray posearray_msg;
 				for (std::size_t i=0; i < total; i++)
 				{
 					std::cout << CakeCandidate.at(i).tx <<std::endl;
 					std::cout << CakeCandidate.at(i).ty <<std::endl;
 					std::cout << CakeCandidate.at(i).tz <<std::endl;
 					std::cout << "---------------------" <<std::endl;
+					geometry_msgs::Pose p;
+					p.position.x = CakeCandidate.at(i).tx;
+					p.position.y = CakeCandidate.at(i).ty;
+					p.position.z = CakeCandidate.at(i).tz;
+					p.orientation.x = CakeCandidate.at(i).rx;
+					p.orientation.y = CakeCandidate.at(i).ry;
+					p.orientation.z = CakeCandidate.at(i).rz;
+					p.orientation.w = CakeCandidate.at(i).rw;
+					posearray_msg.poses.push_back(p);
 				}
-				//cakes_pub.publish();
+				posearray_msg.header.frame_id = "sample_camera";
+				cakes_pub.publish(posearray_msg);
+				CakeCandidate.clear();
 			}
 			else
 			{
+				CakeCandidate.clear();
 				return;
 			}
 		}
 		
 		void filtercandidate(std::vector<Cake> &candidate, float &min_dist)
 		{
+			std::cout << "candidate number:" << candidate.size() << std::endl;
 			for (std::size_t i=0; i < candidate.size(); i++)
 			{
 				for (std::size_t j = i+1; j < candidate.size(); j++)
