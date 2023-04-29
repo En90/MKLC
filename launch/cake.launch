@@ -3,11 +3,14 @@
 <launch>
   
   <node pkg="mklc" type="cake_node" name="cake_node" output="screen">
-    <!-- <param name="sub1_topic" value="" /> -->
-    <!-- <param name="sub2_topic" value="" /> -->
+    <param name="sub1_topic" value="/cam_a/aruco_marker_publisher/markers" />
+    <param name="sub2_topic" value="/cam_b/aruco_marker_publisher/markers" />
     <!-- <param name="sub3_topic" value="" /> -->
-    <param name="subyolo_topic" value="/mklc_node/cakes" />
-    <param name="min_dist" value="0.08" />
+    <!-- <param name="subyolo_topic" value="/mklc_openvino_node/cakes" /> -->
+    <param name="subyolo2_topic" value="/mklc_side/cakes" />
+    <!-- <param name="sub1_topic" value="/aruco_marker_publisher/markers" /> -->
+    <param name="subyolo_topic" value="/mklc_double/cakes" />
+    <param name="min_dist" value="0.12" />
   </node>
 
 </launch>

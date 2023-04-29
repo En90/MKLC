@@ -1,0 +1,7 @@
+<launch>
+  <include file="$(find realsense2_camera)/launch/rs_aligned_depth_custom.launch" />
+  <include file="$(find intel_ncs2)/launch/inference_node.launch" />
+  <include file="$(find mklc)/launch/mklc_openvino.launch" />
+  <include file="$(find mklc)/launch/cake.launch" />
+  <include file="$(find aruco_ros)/launch/try.launch" />
+</launch>

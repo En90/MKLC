@@ -4,8 +4,7 @@
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 
-#include <darknet_ros_msgs/BoundingBox.h>
-#include <darknet_ros_msgs/BoundingBoxes.h>
+#include <geometry_msgs/PoseArray.h>
 #include <aruco_msgs/MarkerArray.h>
 #include <aruco_msgs/Marker.h>
 
@@ -33,7 +32,7 @@ class Node
 private:
 	ros::NodeHandle nh;
 	image_transport::ImageTransport it;
-	ros::Subscriber bbox_sub;
+	ros::Subscriber pose_sub;
 	ros::Subscriber caminfo_sub;
 	image_transport::Subscriber image_sub;
 	ros::Publisher pose_pub;
@@ -45,60 +44,60 @@ private:
 	cv::Mat depth_image;
 	float point_3d[3];
 	tf::TransformListener _tfListener;
-    std::string camera_frame;
+	std::string camera_frame;
 	
 public:
 	Node():
 		nh("~"), it(nh)
 	{
-		bbox_sub = nh.subscribe("/darknet_ros/bounding_boxes", 1, &Node::Bbox_callback, this);
+		pose_sub = nh.subscribe("/openvino/boundingboxes", 1, &Node::Bbox_callback, this);
 		image_sub = it.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &Node::Image_callback, this);
 		caminfo_sub = nh.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &Node::Info_callback, this);
 		pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose",100);
 		cake_pub = nh.advertise<aruco_msgs::MarkerArray>("cakes",100);
 		nh.param<std::string>("camera_frame", camera_frame, "camera_color_frame");
-	}
+    }
 	
-	void Bbox_callback(const darknet_ros_msgs::BoundingBoxes &msg)
+	void Bbox_callback(const geometry_msgs::PoseArray &msg)
 	{
 		ros::Time curr_stamped = ros::Time::now();
-		auto bboxes = msg.bounding_boxes;
+		auto points = msg.poses;
 		int brown_count = 0;
 		int pink_count = 0;
 		int yellow_count = 0;
 		int cake_count = 0;
 		aruco_msgs::MarkerArray cakes;
-		for (std::size_t i = 0; i < bboxes.size(); i++)
+		for (std::size_t i = 0; i < points.size(); i++)
 		{
-			if (bboxes[i].id == 0 || bboxes[i].id == 4 || bboxes[i].id == 5 || bboxes[i].id == 1)
+			if (points[i].position.z == 0 || points[i].position.z == 4 || points[i].position.z == 5 || points[i].position.z == 1)
 			{
 				float pixel_to_find[2];
-				pixel_to_find[0] = (bboxes[i].xmin + bboxes[i].xmax)/2;
-				pixel_to_find[1] = (bboxes[i].ymin + bboxes[i].ymax)/2;
+				pixel_to_find[0] = points[i].position.x;
+				pixel_to_find[1] = points[i].position.y;
 				float depth = depth_image.at<float>(pixel_to_find[1], pixel_to_find[0]);
 				//std::cout << depth << std::endl;
 				std::string name;
 				aruco_msgs::Marker marker;
-				marker.id = bboxes[i].id;
-				if (bboxes[i].id == 0)
+				marker.id = points[i].position.z;
+				if (points[i].position.z == 0)
 				{
 					brown_count++;
 					name = "brown";
 					name.append(std::to_string(brown_count));
 				}
-				else if (bboxes[i].id == 4)
+				else if (points[i].position.z == 4)
 				{
 					pink_count++;
 					name = "pink";
 					name.append(std::to_string(pink_count));
 				}
-				else if (bboxes[i].id == 5)
+				else if (points[i].position.z == 5)
 				{
 					yellow_count++;
 					name = "yellow";
 					name.append(std::to_string(yellow_count));
 				}
-				else if (bboxes[i].id == 1)
+				else if (points[i].position.z == 1)
 				{
 					cake_count++;
 					name = "cake";
@@ -187,10 +186,9 @@ public:
 		tf::Transform transform;
 		transform.setOrigin(tf::Vector3(point[0]/1000, point[1]/1000, point[2]/1000));
 		tf::Quaternion q;
-		q.setRPY(0,0,2.36);
+		q.setRPY(2.36,0,0);
 		transform.setRotation(q);
 		br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), camera_frame, name));
-		
 	}
 	
 	bool getTransform(const std::string& refFrame, const std::string& childFrame, tf::StampedTransform& transform)

@@ -1,0 +1,7 @@
+<launch>
+  <include file="$(find realsense2_camera)/launch/rs_aligned_depth_custom.launch" />
+  <include file="$(find darknet_ros)/launch/yolo-fastest-custom.launch" />
+  <include file="$(find mklc)/launch/mklc.launch" />
+  <include file="$(find aruco_ros)/launch/try.launch" />
+  <include file="$(find mklc)/launch/cake.launch" />
+</launch>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+  <node pkg="mklc" type="mklc_double" name="mklc_double" output="screen">
+    <param name="camera1_frame"    value="camera_color_frame_1"/>
+    <param name="camera2_frame"    value="camera_color_frame_2"/>
+    <param name="image_height"     value="720"/>
+    <param name="image_width"      value="1280"/>
+  </node>
+  <!-- <node pkg="tf" type="static_transform_publisher" name="central_to_world" args="0 0.9 1.0 -1.57 0 -2.36 world_frame camera_color_frame 100" /> -->
+</launch>

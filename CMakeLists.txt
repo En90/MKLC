@@ -170,6 +170,25 @@ target_link_libraries(test_hellowrs ${realsense2_LIBRARY})
 add_executable(cake_node src/cake_node.cpp)
 target_link_libraries(cake_node ${catkin_LIBRARIES})
 add_dependencies(cake_node ${catkin_EXPORTED_TARGETS})
+
+add_executable(mklc_openvino_node src/mklc_openvino_node.cpp)
+target_link_libraries(mklc_openvino_node ${catkin_LIBRARIES})
+add_dependencies(mklc_openvino_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(mklc_openvino_node ${realsense2_LIBRARY})
+
+add_executable(testdepth src/testdepth.cpp)
+target_link_libraries(testdepth ${catkin_LIBRARIES})
+add_dependencies(testdepth ${catkin_EXPORTED_TARGETS})
+target_link_libraries(testdepth ${realsense2_LIBRARY})
+
+add_executable(mklc_double src/mklc_double.cpp)
+target_link_libraries(mklc_double ${catkin_LIBRARIES})
+add_dependencies(mklc_double ${catkin_EXPORTED_TARGETS})
+target_link_libraries(mklc_double ${realsense2_LIBRARY})
+
+add_executable(tf_show src/tf_show.cpp)
+target_link_libraries(tf_show ${catkin_LIBRARIES})
+add_dependencies(tf_show ${catkin_EXPORTED_TARGETS})
 #############
 ## Install ##
 #############

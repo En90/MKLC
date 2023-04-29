@@ -15,6 +15,8 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <string>
 
+#include <opencv2/highgui/highgui.hpp>
+
 class CamInfo
 {
 	public:
@@ -36,6 +38,7 @@ private:
 	ros::Subscriber bbox_sub;
 	ros::Subscriber caminfo_sub;
 	image_transport::Subscriber image_sub;
+	image_transport::Subscriber imagecolor_sub;
 	ros::Publisher pose_pub;
 	ros::Publisher cake_pub;
 	
@@ -45,7 +48,6 @@ private:
 	cv::Mat depth_image;
 	float point_3d[3];
 	tf::TransformListener _tfListener;
-    std::string camera_frame;
 	
 public:
 	Node():
@@ -53,12 +55,16 @@ public:
 	{
 		bbox_sub = nh.subscribe("/darknet_ros/bounding_boxes", 1, &Node::Bbox_callback, this);
 		image_sub = it.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &Node::Image_callback, this);
+		imagecolor_sub = it.subscribe("/darknet_ros/detection_image", 1, &Node::Imagecolor_callback, this);
 		caminfo_sub = nh.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &Node::Info_callback, this);
 		pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose",100);
 		cake_pub = nh.advertise<aruco_msgs::MarkerArray>("cakes",100);
-		nh.param<std::string>("camera_frame", camera_frame, "camera_color_frame");
+		cv::namedWindow("test");
+		cv::setMouseCallback("test", &Node::mouseCall, this);
 	}
 	
+	cv::Mat color_image;
+
 	void Bbox_callback(const darknet_ros_msgs::BoundingBoxes &msg)
 	{
 		ros::Time curr_stamped = ros::Time::now();
@@ -109,7 +115,7 @@ public:
 				
 				if (cam_info_received == true && image_received == true)
 				{
-					rs2_deproject_pixel_to_point(point_3d, rs_intrin, pixel_to_find, depth, name, camera_frame);
+					rs2_deproject_pixel_to_point(point_3d, rs_intrin, pixel_to_find, depth, name);
 					tf::StampedTransform transformstamped;
 					if (getTransform("world_frame", name, transformstamped))
 					{
@@ -141,6 +147,12 @@ public:
 		image_received = true;
 	}
 	
+	void Imagecolor_callback(const sensor_msgs::ImageConstPtr &msg)
+	{
+		cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+		color_image = cv_ptr->image;
+	}
+
 	void Info_callback(const sensor_msgs::CameraInfo &msg)
 	{
 		rs_intrin.fx = msg.K[0]; //fx
@@ -158,7 +170,7 @@ public:
 		cam_info_received = true;
 	}
 	
-	static void rs2_deproject_pixel_to_point(float point[3], CamInfo intrin, const float pixel[2], float depth, std::string name, std::string camera_frame)
+	static void rs2_deproject_pixel_to_point(float point[3], CamInfo intrin, const float pixel[2], float depth, std::string name)
 	{
 		assert(intrin.model != RS2_DISTORTION_MODIFIED_BROWN_CONRADY); // Cannot deproject from a forward-distorted image
 		assert(intrin.model != RS2_DISTORTION_FTHETA); // Cannot deproject to an ftheta image
@@ -178,19 +190,36 @@ public:
 		point[0] = depth * x;
 		point[1] = depth * y;
 		point[2] = depth;
-		//std::cout << name <<std::endl;
-		//std::cout << "x: " << point[0]/1000 << std::endl;
-		//std::cout << "y: " << point[1]/1000 << std::endl;
-		//std::cout << "z: " << point[2]/1000 << std::endl;
-		//std::cout << "---------------" << std::endl;
 		static tf::TransformBroadcaster br;
 		tf::Transform transform;
 		transform.setOrigin(tf::Vector3(point[0]/1000, point[1]/1000, point[2]/1000));
 		tf::Quaternion q;
 		q.setRPY(0,0,2.36);
 		transform.setRotation(q);
-		br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), camera_frame, name));
-		
+		br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_color_frame", name));
+	}
+
+	static void rs2_deproject_pixel_to_point(float point[3], CamInfo intrin, const float pixel[2], float depth)
+	{
+		assert(intrin.model != RS2_DISTORTION_MODIFIED_BROWN_CONRADY); // Cannot deproject from a forward-distorted image
+		assert(intrin.model != RS2_DISTORTION_FTHETA); // Cannot deproject to an ftheta image
+		//assert(intrin->model != RS2_DISTORTION_BROWN_CONRADY); // Cannot deproject to an brown conrady model
+
+		float x = (pixel[0] - intrin.ppx) / intrin.fx;
+		float y = (pixel[1] - intrin.ppy) / intrin.fy;
+		if(intrin.model == RS2_DISTORTION_INVERSE_BROWN_CONRADY)
+		{
+		    float r2  = x*x + y*y;
+		    float f = 1 + intrin.coeffs[0]*r2 + intrin.coeffs[1]*r2*r2 + intrin.coeffs[4]*r2*r2*r2;
+		    float ux = x*f + 2*intrin.coeffs[2]*x*y + intrin.coeffs[3]*(r2 + 2*x*x);
+		    float uy = y*f + 2*intrin.coeffs[3]*x*y + intrin.coeffs[2]*(r2 + 2*y*y);
+		    x = ux;
+		    y = uy;
+		}
+		point[0] = depth * x;
+		point[1] = depth * y;
+		point[2] = depth;
+		return;
 	}
 	
 	bool getTransform(const std::string& refFrame, const std::string& childFrame, tf::StampedTransform& transform)
@@ -215,11 +244,56 @@ public:
 		}
 		return true;
 	}
+
+	static void mouseCall(int event, int x, int y, int flags, void* param)
+	{
+		if (event == cv::EVENT_LBUTTONDBLCLK)
+		{
+			float pixel_to_find[2];
+			pixel_to_find[0] = x;
+			pixel_to_find[1] = y;
+			float depth = ((Node*)param)->depth_image.at<float>(pixel_to_find[1], pixel_to_find[0]);
+			if (((Node*)param)->cam_info_received == true && ((Node*)param)->image_received == true)
+			{
+				float point_3d_[3];
+				rs2_deproject_pixel_to_point(point_3d_, ((Node*)param)->rs_intrin, pixel_to_find, depth);
+				tf::Transform transform;
+				transform.setOrigin(tf::Vector3(point_3d_[0]/1000, point_3d_[1]/1000, point_3d_[2]/1000));
+				tf::Quaternion q;
+				q.setRPY(0,0,0);
+				transform.setRotation(q);
+				tf::StampedTransform transformstamped;
+				if ( ((Node*)param)->getTransform("world_frame", "camera_color_frame", transformstamped) )
+				{
+					transform = static_cast<tf::Transform>(transformstamped) * transform;
+					ROS_INFO("reference to world");
+					ROS_INFO("x: %f, y: %f, z: %f",transform.getOrigin().x(),transform.getOrigin().y(),transform.getOrigin().z());
+				}
+				else
+				{
+					ROS_INFO("reference to camera");
+					ROS_INFO("x: %f, y: %f, z: %f",point_3d_[0]/1000,point_3d_[1]/1000,point_3d_[2]/1000);
+				}	
+			}
+		}
+		return;
+	}
 };
 
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "mklc_node");
 	Node node;
-	ros::spin();
+	while(ros::ok())
+	{
+		ros::spinOnce();
+		if( node.color_image.size[0] != 0)
+		{
+			// cv::imshow("test",node.color_image);
+			char k = cv::waitKey(20);
+    		if( k == 'ESC')
+        		ros::shutdown();
+		}
+	}
+	// ros::spin();
 }
