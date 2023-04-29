@@ -10,7 +10,7 @@
     <param name="subyolo2_topic" value="/mklc_side/cakes" />
     <!-- <param name="sub1_topic" value="/aruco_marker_publisher/markers" /> -->
     <param name="subyolo_topic" value="/mklc_double/cakes" />
-    <param name="min_dist" value="0.12" />
+    <param name="min_dist" value="0.1" />
   </node>
 
 </launch>

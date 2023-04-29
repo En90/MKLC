@@ -9,6 +9,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <std_msgs/Int32.h>
 #include <std_msgs/Int32MultiArray.h>
+#include <std_msgs/Bool.h>
 
 class Cake
 {
@@ -35,11 +36,13 @@ class Point
 		float k_y = 0.4;
 		int x_change;
 		int y_change;
-		double threshold_1 = 0.1;
-		double threshold_send = 0.05;
+		double threshold_lowpass = 0.1; // m
+		double threshold_send = 0.05; // m
 		float pub_x;
 		float pub_y;
 		bool big_change = false;
+		ros::Time start_time;
+		bool start = false;
     
 	public:		
 		float x;
@@ -62,7 +65,25 @@ class Point
 			old_y = in_y;
 			pub_x = in_x;
 			pub_y = in_y;
+			start = false;
 		}
+
+		//  constructor with time
+		Point(float in_x, float in_y, int in_id, int in_color_id, ros::Time begin)
+		{
+			x = in_x;
+			y = in_y;
+			id = in_id;
+			color_id = in_color_id;
+			old_x = in_x;
+			old_y = in_y;
+			pub_x = in_x;
+			pub_y = in_y;
+			start_time = begin;
+			start = true;
+			threshold_send = 0.1;	
+		}
+
 		// en add
 		void low_pass_filter(double x, double y)
 		{
@@ -75,7 +96,7 @@ class Point
 			
 			if(x_new_flag == x_old_flag)
 			{
-				if(abs(x - old_x) > threshold_1)
+				if(abs(x - old_x) > threshold_lowpass)
 				{
 					x_change += 1;
 					big_change = true;
@@ -103,7 +124,7 @@ class Point
 			
 			if(y_new_flag == y_old_flag)
 			{
-				if(abs(y - old_y) > threshold_1)
+				if(abs(y - old_y) > threshold_lowpass)
 				{
 					y_change += 1;
 					big_change = true;
@@ -127,6 +148,7 @@ class Point
 
 		bool send()
 		{
+			adapt_threshold();
 			double distance = sqrt( pow(pub_x - new_x, 2) + pow(pub_y - new_y, 2) );
 			if(distance > threshold_send || big_change == true)
 			{
@@ -137,6 +159,26 @@ class Point
 			}
 			else
 				return false;
+		}
+
+		void adapt_threshold()
+		{
+			if(start==false)
+				return;
+			else
+			{
+				ros::Time now = ros::Time::now();
+				//threshold_send from 0.1(0 sec) to 0.05(50sec) 
+				threshold_send =  0.1 - (now.toSec()-start_time.toSec())/100*0.05;
+				if(threshold_send < 0.05)
+					threshold_send = 0.05;
+				
+				if(now.toSec()-start_time.toSec() >= 100)
+				{
+					ROS_INFO("competition end");
+					start=false;
+				}
+			}
 		}
 };
 
@@ -155,6 +197,7 @@ class Interface
 		ros::Publisher cakes_pub;
 		ros::Publisher cherry_pub;
 		ros::Publisher taste_pub;
+		ros::Subscriber competition_start;
 		ros::Subscriber m_sub1;
 		ros::Subscriber m_sub2;
 		ros::Subscriber m_sub3;
@@ -179,6 +222,7 @@ class Interface
 		// en add
 		void init_idealpoint()
 		{
+			Idealpoint.clear();
 			//1
 			Point point1(1.125, 0.725, 0, 4);
 			Idealpoint.push_back(point1);
@@ -215,7 +259,48 @@ class Interface
 			//12
 			Point point12(2.425, 1.775, 11, 2);
 			Idealpoint.push_back(point12);
-			std::cout << Idealpoint.size() << std::endl;
+		}
+
+		// en add: with time
+		void init_idealpoint(const ros::Time& begin)
+		{
+			Idealpoint.clear();
+			//1
+			Point point1(1.125, 0.725, 0, 4, begin);
+			Idealpoint.push_back(point1);
+			//2
+			Point point2(1.125, 1.275, 1, 4, begin);
+			Idealpoint.push_back(point2);
+			//3
+			Point point3(1.875, 0.725, 2, 4, begin);
+			Idealpoint.push_back(point3);
+			//4
+			Point point4(1.875, 1.275, 3, 4, begin);
+			Idealpoint.push_back(point4);
+			//5
+			Point point5(0.775, 0.225, 4, 3, begin);
+			Idealpoint.push_back(point5);
+			//6
+			Point point6(0.775, 1.775, 5, 3, begin);
+			Idealpoint.push_back(point6);
+			//7
+			Point point7(2.225, 0.225, 6, 3, begin);
+			Idealpoint.push_back(point7);
+			//8
+			Point point8(2.225, 1.775, 7, 3, begin);
+			Idealpoint.push_back(point8);
+			//9
+			Point point9(0.575, 0.225, 8, 2, begin);
+			Idealpoint.push_back(point9);
+			//10
+			Point point10(0.575, 1.775, 9, 2, begin);
+			Idealpoint.push_back(point10);
+			//11
+			Point point11(2.425, 0.225, 10, 2, begin);
+			Idealpoint.push_back(point11);
+			//12
+			Point point12(2.425, 1.775, 11, 2, begin);
+			Idealpoint.push_back(point12);
 		}
 
 		// en add
@@ -375,9 +460,10 @@ class Interface
 		{
 			timer = nh.createTimer(ros::Duration(2), &Interface::pub_callback, this);
 			cherry_timer = nh.createTimer(ros::Duration(1), &Interface::cherry_pub_callback, this);
-			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("obstacle_position_array", 100);
-			cherry_pub = nh.advertise<std_msgs::Int32MultiArray>("/cherryExistence", 100);
+			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("/cake_position_array", 10);
+			cherry_pub = nh.advertise<std_msgs::Int32MultiArray>("/cherryExistence", 10);
 			taste_pub = nh.advertise<geometry_msgs::Point>("/adjustCake", 15);
+			competition_start = nh.subscribe("/startornot", 1, &Interface::start_callback, this);
 			cherry_near_sub = nh.subscribe("/mklc_double/cherry_near", 1, &Interface::near_callback, this);
 			cherry_far_sub = nh.subscribe("/mklc_double/cherry_far", 1, &Interface::far_callback, this);
 			cherry_side_sub = nh.subscribe("/mklc_side/cherry_side", 1, &Interface::side_callback, this);
@@ -471,7 +557,7 @@ class Interface
 				}
 
 				std::size_t total = CakeCandidate.size();
-				// std::cout << "total: " << total << std::endl;
+				std::cout << "total: " << total << std::endl;
 				geometry_msgs::PoseArray posearray_msg;
 				for (std::size_t i=0; i < total; i++)
 				{
@@ -505,17 +591,22 @@ class Interface
 		
 		void filtercandidate(std::vector<Cake> &candidate, float &min_dist)
 		{
-			// std::cout << "candidate number:" << candidate.size() << std::endl;
+			std::cout << "candidate number:" << candidate.size() << std::endl;
 			for (std::size_t i=0; i < candidate.size(); i++)
 			{
 				for (std::size_t j = i+1; j < candidate.size(); j++)
 				{
-					float distance = pow(candidate[i].tx-candidate[j].tx,2) + pow(candidate[i].ty-candidate[j].ty,2) + pow(candidate[i].ty-candidate[j].ty,2);
-					if (distance < pow(min_dist,2))
+					float distance = pow(candidate[i].tx-candidate[j].tx,2) + pow(candidate[i].ty-candidate[j].ty,2);
+					// cake1 pink2 yellow3 brown4
+					// en add: both brown or yellow
+					if ( distance < pow(min_dist,2) )
 					{
 						candidate[j].tx = (candidate[i].tx + candidate[j].tx)/2;
 						candidate[j].ty = (candidate[i].ty + candidate[j].ty)/2;
 						candidate[j].tz = (candidate[i].tz + candidate[j].tz)/2;
+						// en add: aruco see pink but yolo see cake, any detection is a cake, it must be a cake
+						if( (candidate[j].id == 1) || (candidate[i].id == 1) )
+							candidate[j].id = 1;
 						candidate.erase(candidate.begin()+i);
 						i--;
 						continue;
@@ -559,6 +650,15 @@ class Interface
 				cherry_msg.data.push_back(cherry3);
 				cherry_pub.publish(cherry_msg);
 				cherry_change = false;
+			}
+		}
+
+		void start_callback(const std_msgs::Bool &msg)
+		{
+			if(msg.data == true)
+			{
+				ROS_INFO("start competision");
+				init_idealpoint(ros::Time::now());
 			}
 		}
 };
