@@ -222,6 +222,7 @@ class Interface
 		bool cherry_change = false;
 
 		std::vector<Cake> unify_cake;
+		std::vector<Cake> unify_cake_wait;
 
 		// en add
 		void init_idealpoint()
@@ -468,13 +469,13 @@ class Interface
 			else
 			{
 				bool up = false;
-				double min_dist = 0.1;
+				double min_dist = 0.05;
 				int temp;
 				bool pinkorcake = false;
 				for(std::size_t i=0; i < unify_cake.size(); i++)
 				{
 					//remove too old data
-					if((ros::Time::now().toSec() - unify_cake[i].stamp.toSec())>1.5)
+					if((ros::Time::now().toSec() - unify_cake[i].stamp.toSec())>1)
 					{
 						unify_cake.erase(unify_cake.begin()+i);
 						i--;
@@ -540,10 +541,78 @@ class Interface
 					}
 					if(msg.poses.size()!=0)
 						obstacle_pub.publish(msg);
+					
+					return;
 				}
 
 				if(up==false)
-					unify_cake.push_back(cake);
+				{
+					bool up_wait = false;
+					min_dist = 0.03;
+					int temp;
+					pinkorcake = false;
+					for(std::size_t i=0; i < unify_cake_wait.size(); i++)
+					{
+						//remove too old data
+						if((ros::Time::now().toSec() - unify_cake_wait[i].stamp.toSec())>1)
+						{
+							unify_cake_wait.erase(unify_cake_wait.begin()+i);
+							i--;
+							continue;
+						}
+						else
+						{
+							double distance = sqrt( pow(cake.tx - unify_cake_wait[i].tx, 2) + pow(cake.ty - unify_cake_wait[i].ty, 2) );
+							//color id not match
+							if(cake.id != unify_cake_wait[i].id)
+							{
+								if( (cake.id==1 && unify_cake_wait[i].id==2)||(cake.id==2 && unify_cake_wait[i].id==1) )
+								{
+									//pink or cake
+									if(distance < min_dist)
+									{
+										temp = i;
+										min_dist = distance;
+										up_wait = true;
+										pinkorcake = true;
+									}
+									else
+										continue;
+								}
+								else
+									continue;
+							}
+							else
+							{
+								//cake id = unify_cake[i] id
+								if(distance < min_dist)
+								{
+									temp = i;
+									min_dist = distance;
+									up_wait = true;
+									pinkorcake = false;
+								}
+								else
+									continue;
+							}
+						}
+					}
+					
+					if(up_wait == true)
+					{
+						if(pinkorcake == true)
+							unify_cake_wait[temp].id = 1;
+						unify_cake_wait[temp].tx = cake.tx * 0.3 + unify_cake_wait[temp].tx * 0.7;
+						unify_cake_wait[temp].ty = cake.ty * 0.3 + unify_cake_wait[temp].ty * 0.7;
+						unify_cake_wait[temp].stamp = cake.stamp;
+
+						unify_cake.push_back(cake);
+					}
+					else if(up_wait == false)
+					{
+						unify_cake_wait.push_back(cake);
+					}
+				}
 			}
 		}
 			

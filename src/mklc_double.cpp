@@ -63,6 +63,20 @@ private:
 	bool cherry0 = false;
 	bool cherry1 = false;
 	bool cherry3 = false;
+	// add depth image ptr container
+	std::vector<cv_bridge::CvImagePtr> container;
+
+	cv::Mat get_depth_img(ros::Time time_inference)
+	{
+		for(auto& ptr : container)
+		{
+			if(ptr->header.stamp.toSec() > time_inference.toSec())
+			{
+				return ptr->image;
+			}
+		}
+		return container[0]->image;
+	}
 	
 public:
 	Node():
@@ -86,7 +100,7 @@ public:
 	
 	void pose_callback(const geometry_msgs::PoseArray &msg)
 	{
-		ros::Time curr_stamped = ros::Time::now();
+		ros::Time curr_stamped = msg.header.stamp;
 		auto points = msg.poses;
 		aruco_msgs::MarkerArray cakes;
 		for (std::size_t i = 0; i < points.size(); i++)
@@ -172,6 +186,7 @@ public:
 		}
 		if (cam2_info_received == true && image2_received == true)
 		{
+			cakes.header.stamp = msg.header.stamp;
 			cake_pub.publish(cakes);
 		}
 		image2_received = false;
@@ -179,7 +194,7 @@ public:
 
 	void Bbox_callback(const darknet_ros_msgs::BoundingBoxes &msg)
 	{
-		ros::Time curr_stamped = ros::Time::now();
+		ros::Time curr_stamped = msg.image_header.stamp;
 		auto bboxes = msg.bounding_boxes;
 		aruco_msgs::MarkerArray cakes;
 		for (std::size_t i = 0; i < bboxes.size(); i++)
@@ -219,7 +234,9 @@ public:
 				}
 				if (cam1_info_received == true && image1_received == true)
 				{
-					float depth = depth_image1.at<float>(pixel_to_find[1], pixel_to_find[0]);
+					cv::Mat depth_image = get_depth_img(msg.image_header.stamp);
+					float depth = depth_image.at<float>(pixel_to_find[1], pixel_to_find[0]);
+					//float depth = depth_image1.at<float>(pixel_to_find[1], pixel_to_find[0]);
 					rs2_deproject_pixel_to_point(point_3d, rs_intrin2, pixel_to_find, depth);
 					tf::Transform transform;
 					transform.setOrigin(tf::Vector3(point_3d[0]/1000, point_3d[1]/1000, point_3d[2]/1000));
@@ -258,9 +275,11 @@ public:
 		}
 		if (cam1_info_received == true && image1_received == true)
 		{
+			cakes.header.stamp = msg.image_header.stamp;
 			cake_pub.publish(cakes);
 		}
 		image1_received = false;
+		container.clear();
 	}
 
 	void Image_callback1(const sensor_msgs::ImageConstPtr &msg)
@@ -268,6 +287,7 @@ public:
 		cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::TYPE_32FC1);
 		depth_image1 = cv_ptr->image;
 		image1_received = true;
+		container.push_back(cv_ptr);
 	}
 
 	void Image_callback2(const sensor_msgs::ImageConstPtr &msg)
