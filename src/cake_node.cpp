@@ -22,6 +22,7 @@ class Cake
 		float ry;
 		float rz;
 		float rw;
+		ros::Time stamp;
 };
 
 // en add
@@ -197,6 +198,7 @@ class Interface
 		ros::Publisher cakes_pub;
 		ros::Publisher cherry_pub;
 		ros::Publisher taste_pub;
+		ros::Publisher obstacle_pub;
 		ros::Subscriber competition_start;
 		ros::Subscriber m_sub1;
 		ros::Subscriber m_sub2;
@@ -218,6 +220,8 @@ class Interface
 		int cherry2 = 1;
 		int cherry3 = 1;
 		bool cherry_change = false;
+
+		std::vector<Cake> unify_cake;
 
 		// en add
 		void init_idealpoint()
@@ -453,6 +457,95 @@ class Interface
 			// 	}
 			// }
 		}
+
+		void update_unify(Cake& cake)
+		{
+			geometry_msgs::PoseArray msg;
+			if( unify_cake.size()==0 )
+			{
+				unify_cake.push_back(cake);
+			}
+			else
+			{
+				bool up = false;
+				double min_dist = 0.1;
+				int temp;
+				bool pinkorcake = false;
+				for(std::size_t i=0; i < unify_cake.size(); i++)
+				{
+					//remove too old data
+					if((ros::Time::now().toSec() - unify_cake[i].stamp.toSec())>1.5)
+					{
+						unify_cake.erase(unify_cake.begin()+i);
+						i--;
+						continue;
+					}
+					else
+					{
+						double distance = sqrt( pow(cake.tx - unify_cake[i].tx, 2) + pow(cake.ty - unify_cake[i].ty, 2) );
+						//color id not match
+						if(cake.id != unify_cake[i].id)
+						{
+							if( (cake.id==1 && unify_cake[i].id==2)||(cake.id==2 && unify_cake[i].id==1) )
+							{
+								//pink or cake
+								if(distance < min_dist)
+								{
+									temp = i;
+									min_dist = distance;
+									up = true;
+									pinkorcake = true;
+								}
+								else
+									continue;
+							}
+							else
+								continue;
+						}
+						else
+						{
+							//cake id = unify_cake[i] id
+							if(distance < min_dist)
+							{
+								temp = i;
+								min_dist = distance;
+								up = true;
+								pinkorcake = false;
+							}
+							else
+								continue;
+						}
+					}
+				}
+
+				if(up == true)
+				{
+					if(pinkorcake == true)
+						unify_cake[temp].id = 1;
+					unify_cake[temp].tx = cake.tx * 0.3 + unify_cake[temp].tx * 0.7;
+					unify_cake[temp].ty = cake.ty * 0.3 + unify_cake[temp].ty * 0.7;
+					unify_cake[temp].stamp = cake.stamp;
+
+					for(int i = 0; i < unify_cake.size(); i++)
+					{
+						geometry_msgs::Pose pose;
+						pose.position.x = unify_cake[i].tx;
+						pose.position.y = unify_cake[i].ty;
+						pose.position.z = unify_cake[i].tz;
+						pose.orientation.x = 0;
+						pose.orientation.y = 0;
+						pose.orientation.z = 0;
+						pose.orientation.w = 1;
+						msg.poses.push_back(pose);
+					}
+					if(msg.poses.size()!=0)
+						obstacle_pub.publish(msg);
+				}
+
+				if(up==false)
+					unify_cake.push_back(cake);
+			}
+		}
 			
 	public:
 		Interface():
@@ -460,9 +553,10 @@ class Interface
 		{
 			timer = nh.createTimer(ros::Duration(2), &Interface::pub_callback, this);
 			cherry_timer = nh.createTimer(ros::Duration(1), &Interface::cherry_pub_callback, this);
-			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("/cake_position_array", 10);
+			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("/cake_node/obstacle_position_array", 10);
 			cherry_pub = nh.advertise<std_msgs::Int32MultiArray>("/cherryExistence", 10);
 			taste_pub = nh.advertise<geometry_msgs::Point>("/adjustCake", 15);
+			obstacle_pub = nh.advertise<geometry_msgs::PoseArray>("/obstacle_position_array", 10);
 			competition_start = nh.subscribe("/startornot", 1, &Interface::start_callback, this);
 			cherry_near_sub = nh.subscribe("/mklc_double/cherry_near", 1, &Interface::near_callback, this);
 			cherry_far_sub = nh.subscribe("/mklc_double/cherry_far", 1, &Interface::far_callback, this);
@@ -512,9 +606,11 @@ class Interface
 					cake.ry = msg.markers[i].pose.pose.orientation.y;
 					cake.rz = msg.markers[i].pose.pose.orientation.z;
 					cake.rw = msg.markers[i].pose.pose.orientation.w;
+					cake.stamp = ros::Time::now();
 					CakeCandidate.push_back(cake);
+					update_unify(cake);
 				}
-			}
+			}		
 		}
 
 		void sub_callback2(const aruco_msgs::MarkerArray &msg)
@@ -530,7 +626,9 @@ class Interface
 				cake.ry = msg.markers[i].pose.pose.orientation.y;
 				cake.rz = msg.markers[i].pose.pose.orientation.z;
 				cake.rw = msg.markers[i].pose.pose.orientation.w;
+				cake.stamp = ros::Time::now();
 				CakeCandidate.push_back(cake);
+				update_unify(cake);
 			}
 		}
 
@@ -557,7 +655,7 @@ class Interface
 				}
 
 				std::size_t total = CakeCandidate.size();
-				std::cout << "total: " << total << std::endl;
+				// std::cout << "total: " << total << std::endl;
 				geometry_msgs::PoseArray posearray_msg;
 				for (std::size_t i=0; i < total; i++)
 				{
@@ -591,7 +689,6 @@ class Interface
 		
 		void filtercandidate(std::vector<Cake> &candidate, float &min_dist)
 		{
-			std::cout << "candidate number:" << candidate.size() << std::endl;
 			for (std::size_t i=0; i < candidate.size(); i++)
 			{
 				for (std::size_t j = i+1; j < candidate.size(); j++)

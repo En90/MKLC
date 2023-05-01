@@ -13,7 +13,7 @@ class Show
         Show():
 			nh("~")
 		{
-			sub = nh.subscribe("/cake_node/obstacle_position_array", 1, &Show::callback, this);
+			sub = nh.subscribe("/obstacle_position_array", 1, &Show::callback, this);
         }
 
     void callback(const geometry_msgs::PoseArray &msg)
