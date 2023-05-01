@@ -221,8 +221,8 @@ class Interface
 		int cherry3 = 1;
 		bool cherry_change = false;
 
-		std::vector<Cake> unify_cake;
-		std::vector<Cake> unify_cake_wait;
+		std::vector<std::pair<Cake, int>> unify_cake;
+		std::vector<std::pair<Cake, int>> unify_cake_wait;
 
 		// en add
 		void init_idealpoint()
@@ -459,12 +459,12 @@ class Interface
 			// }
 		}
 
-		void update_unify(Cake& cake)
+		void update_unify(Cake& cake, int stamp_sec)
 		{
 			geometry_msgs::PoseArray msg;
 			if( unify_cake.size()==0 )
 			{
-				unify_cake.push_back(cake);
+				unify_cake.push_back(std::pair<Cake, int>(cake, stamp_sec));
 			}
 			else
 			{
@@ -676,7 +676,7 @@ class Interface
 					cake.rz = msg.markers[i].pose.pose.orientation.z;
 					cake.rw = msg.markers[i].pose.pose.orientation.w;
 					cake.stamp = ros::Time::now();
-					CakeCandidate.push_back(cake);
+					CakeCandidate.push_back(cake, msg.header.stamp.toSec());
 					update_unify(cake);
 				}
 			}		
@@ -696,7 +696,7 @@ class Interface
 				cake.rz = msg.markers[i].pose.pose.orientation.z;
 				cake.rw = msg.markers[i].pose.pose.orientation.w;
 				cake.stamp = ros::Time::now();
-				CakeCandidate.push_back(cake);
+				CakeCandidate.push_back(cake, msg.header.stamp.toSec());
 				update_unify(cake);
 			}
 		}
