@@ -224,6 +224,8 @@ class Interface
 		std::vector<std::pair<Cake, int>> unify_cake;
 		std::vector<std::pair<Cake, int>> unify_cake_wait;
 
+		std::vector<Cake> Past_cakes;
+
 		// en add
 		void init_idealpoint()
 		{
@@ -361,7 +363,7 @@ class Interface
 				for(auto &mem : Memories)
 				{
 					// Has not been assigned and is no more than 30 cm away from the ideal point
-					if(!used_Cake.count(mem.second.second) && !used_Idealpoint.count(mem.second.first)) //&& (mem.first < 0.3)
+					if(!used_Cake.count(mem.second.second) && !used_Idealpoint.count(mem.second.first) && (mem.first < 0.3))
 					{
 						Idealpoint[mem.second.first].low_pass_filter(CakeCandidate[mem.second.second].tx, CakeCandidate[mem.second.second].ty);
 						Idealpoint[mem.second.first].disappeared_count = 0;
@@ -459,168 +461,73 @@ class Interface
 			// }
 		}
 
-		void update_unify(Cake& cake, int stamp_sec)
+		void obstacle_position()
 		{
-			geometry_msgs::PoseArray msg;
-			if( unify_cake.size()==0 )
+			ROS_INFO("inin");
+			geometry_msgs::PoseArray msgs;
+			std::set<int> used_now;
+			std::set<int> used_past;
+			std::vector<std::pair<double,std::pair<int, int>>> matches; 
+			if(Past_cakes.size()==0)
 			{
-				unify_cake.push_back(std::pair<Cake, int>(cake, stamp_sec));
+				Past_cakes.assign(CakeCandidate.begin(), CakeCandidate.end());
+				return;
 			}
-			else
+			for(int i = 0; i < CakeCandidate.size(); i++)
 			{
-				bool up = false;
-				double min_dist = 0.05;
-				int temp;
-				bool pinkorcake = false;
-				for(std::size_t i=0; i < unify_cake.size(); i++)
+				for(int j = 0; j < Past_cakes.size(); j++)
 				{
-					//remove too old data
-					if((ros::Time::now().toSec() - unify_cake[i].stamp.toSec())>1)
-					{
-						unify_cake.erase(unify_cake.begin()+i);
-						i--;
-						continue;
-					}
-					else
-					{
-						double distance = sqrt( pow(cake.tx - unify_cake[i].tx, 2) + pow(cake.ty - unify_cake[i].ty, 2) );
-						//color id not match
-						if(cake.id != unify_cake[i].id)
-						{
-							if( (cake.id==1 && unify_cake[i].id==2)||(cake.id==2 && unify_cake[i].id==1) )
-							{
-								//pink or cake
-								if(distance < min_dist)
-								{
-									temp = i;
-									min_dist = distance;
-									up = true;
-									pinkorcake = true;
-								}
-								else
-									continue;
-							}
-							else
-								continue;
-						}
-						else
-						{
-							//cake id = unify_cake[i] id
-							if(distance < min_dist)
-							{
-								temp = i;
-								min_dist = distance;
-								up = true;
-								pinkorcake = false;
-							}
-							else
-								continue;
-						}
-					}
+					double distance = sqrt( pow(CakeCandidate[i].tx - Past_cakes[j].tx, 2) + pow(CakeCandidate[i].ty - Past_cakes[j].ty, 2) );
+					std::pair<int, int> counter(i, j);
+					std::pair<double, std::pair<int, int>> Mem(distance, counter);
+					matches.push_back(Mem);
 				}
-
-				if(up == true)
+			}
+			if(matches.size() != 0)
+			{
+				for(int i = 0; i < matches.size()-1; i++)
 				{
-					if(pinkorcake == true)
-						unify_cake[temp].id = 1;
-					unify_cake[temp].tx = cake.tx * 0.3 + unify_cake[temp].tx * 0.7;
-					unify_cake[temp].ty = cake.ty * 0.3 + unify_cake[temp].ty * 0.7;
-					unify_cake[temp].stamp = cake.stamp;
-
-					for(int i = 0; i < unify_cake.size(); i++)
+					for(int j = i + 1; j < matches.size(); j++)
 					{
-						geometry_msgs::Pose pose;
-						pose.position.x = unify_cake[i].tx;
-						pose.position.y = unify_cake[i].ty;
-						pose.position.z = unify_cake[i].tz;
-						pose.orientation.x = 0;
-						pose.orientation.y = 0;
-						pose.orientation.z = 0;
-						pose.orientation.w = 1;
-						msg.poses.push_back(pose);
-					}
-					if(msg.poses.size()!=0)
-						obstacle_pub.publish(msg);
-					
-					return;
-				}
-
-				if(up==false)
-				{
-					bool up_wait = false;
-					min_dist = 0.03;
-					int temp;
-					pinkorcake = false;
-					for(std::size_t i=0; i < unify_cake_wait.size(); i++)
-					{
-						//remove too old data
-						if((ros::Time::now().toSec() - unify_cake_wait[i].stamp.toSec())>1)
+						if (matches[j].first < matches[i].first)
 						{
-							unify_cake_wait.erase(unify_cake_wait.begin()+i);
-							i--;
-							continue;
+							auto temp = matches[j];
+							matches[j] = matches[i];
+							matches[i] = temp;
 						}
-						else
-						{
-							double distance = sqrt( pow(cake.tx - unify_cake_wait[i].tx, 2) + pow(cake.ty - unify_cake_wait[i].ty, 2) );
-							//color id not match
-							if(cake.id != unify_cake_wait[i].id)
-							{
-								if( (cake.id==1 && unify_cake_wait[i].id==2)||(cake.id==2 && unify_cake_wait[i].id==1) )
-								{
-									//pink or cake
-									if(distance < min_dist)
-									{
-										temp = i;
-										min_dist = distance;
-										up_wait = true;
-										pinkorcake = true;
-									}
-									else
-										continue;
-								}
-								else
-									continue;
-							}
-							else
-							{
-								//cake id = unify_cake[i] id
-								if(distance < min_dist)
-								{
-									temp = i;
-									min_dist = distance;
-									up_wait = true;
-									pinkorcake = false;
-								}
-								else
-									continue;
-							}
-						}
-					}
-					
-					if(up_wait == true)
-					{
-						if(pinkorcake == true)
-							unify_cake_wait[temp].id = 1;
-						unify_cake_wait[temp].tx = cake.tx * 0.3 + unify_cake_wait[temp].tx * 0.7;
-						unify_cake_wait[temp].ty = cake.ty * 0.3 + unify_cake_wait[temp].ty * 0.7;
-						unify_cake_wait[temp].stamp = cake.stamp;
-
-						unify_cake.push_back(cake);
-					}
-					else if(up_wait == false)
-					{
-						unify_cake_wait.push_back(cake);
 					}
 				}
 			}
+			for(auto &mem : matches)
+			{
+				// Has not been assigned and is no more than 30 cm away from the ideal point
+				if(!used_past.count(mem.second.second) && !used_now.count(mem.second.first) && (mem.first < 0.05))
+				{
+					geometry_msgs::Pose temp;
+					temp.position.x = CakeCandidate[mem.second.first].tx*0.5+Past_cakes[mem.second.second].tx*0.5;
+					temp.position.y = CakeCandidate[mem.second.first].ty*0.5+Past_cakes[mem.second.second].ty*0.5;
+					temp.position.z = CakeCandidate[mem.second.first].tz*0.5+Past_cakes[mem.second.second].tz*0.5;
+					temp.orientation.x = 0;
+					temp.orientation.y = 0;
+					temp.orientation.z = 0;
+					temp.orientation.w = 1;
+					msgs.poses.push_back(temp);
+					used_past.insert(mem.second.second);
+					used_now.insert(mem.second.first);
+				}
+				else
+					continue;
+			}
+			Past_cakes.clear();
+			Past_cakes.assign(CakeCandidate.begin(), CakeCandidate.end());
+			obstacle_pub.publish(msgs);
 		}
 			
 	public:
 		Interface():
 			nh("~")
 		{
-			timer = nh.createTimer(ros::Duration(2), &Interface::pub_callback, this);
+			timer = nh.createTimer(ros::Duration(1.5), &Interface::pub_callback, this);
 			cherry_timer = nh.createTimer(ros::Duration(1), &Interface::cherry_pub_callback, this);
 			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("/cake_node/obstacle_position_array", 10);
 			cherry_pub = nh.advertise<std_msgs::Int32MultiArray>("/cherryExistence", 10);
@@ -662,6 +569,7 @@ class Interface
 
 		void sub_callback(const aruco_msgs::MarkerArray &msg)
 		{
+			//geometry_msgs::PoseArray msg_send;
 			for (std::size_t i=0; i < msg.markers.size(); i++)
 			{
 				if((msg.markers[i].id == 1)||(msg.markers[i].id == 2)||(msg.markers[i].id == 3))
@@ -676,14 +584,17 @@ class Interface
 					cake.rz = msg.markers[i].pose.pose.orientation.z;
 					cake.rw = msg.markers[i].pose.pose.orientation.w;
 					cake.stamp = ros::Time::now();
-					CakeCandidate.push_back(cake, msg.header.stamp.toSec());
-					update_unify(cake);
+					CakeCandidate.push_back(cake);
+					//update_unify(cake, msg.header.stamp.toSec(), msg_send);
 				}
-			}		
+			}
+			//if(msg_send.poses.size()!=0)
+			//	obstacle_pub.publish(msg_send);
 		}
 
 		void sub_callback2(const aruco_msgs::MarkerArray &msg)
 		{
+			//geometry_msgs::PoseArray msg_send;
 			for (std::size_t i=0; i < msg.markers.size(); i++)
 			{
 				Cake cake;
@@ -696,16 +607,19 @@ class Interface
 				cake.rz = msg.markers[i].pose.pose.orientation.z;
 				cake.rw = msg.markers[i].pose.pose.orientation.w;
 				cake.stamp = ros::Time::now();
-				CakeCandidate.push_back(cake, msg.header.stamp.toSec());
-				update_unify(cake);
+				CakeCandidate.push_back(cake);
+				//update_unify(cake, msg.header.stamp.toSec(), msg_send);
 			}
+			//if(msg_send.poses.size()!=0)
+			//	obstacle_pub.publish(msg_send);
 		}
 
 		void pub_callback(const ros::TimerEvent& event)
 		{
-			if(cakes_pub.getNumSubscribers()!=0 || taste_pub.getNumSubscribers()!=0)
+			if(cakes_pub.getNumSubscribers()!=0 || taste_pub.getNumSubscribers()!=0 || obstacle_pub.getNumSubscribers()!=0)
 			{
 				filtercandidate(CakeCandidate, min_dist);
+				obstacle_position();
 				align();
 				for (int i = 0; i < Idealpoint.size() ; i++)
 				{
