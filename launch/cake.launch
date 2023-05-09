@@ -10,7 +10,15 @@
     <param name="subyolo2_topic" value="/mklc_side/cakes" />
     <!-- <param name="sub1_topic" value="/aruco_marker_publisher/markers" /> -->
     <param name="subyolo_topic" value="/mklc_double/cakes" />
-    <param name="min_dist" value="0.1" />
+    
+    <param name="min_dist" value="0.12" />
+    <param name="threshold_send" value="0.12" />
+    <param name="threshold_lowpass" value="0.05" />
+    <param name="disappeared_count_limit" value="3" />
+    <param name="obstacle_merge_dis" value="0.04" />
+    <param name="send_cycle_time" value="2" />
+    <param name="obstacle_lowpass_ratio" value="0.5" />
+    <param name="Ideal_candidate_match_dis" value="0.5" />
   </node>
 
 </launch>

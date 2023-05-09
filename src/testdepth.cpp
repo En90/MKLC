@@ -35,110 +35,30 @@ class Node
 private:
 	ros::NodeHandle nh;
 	image_transport::ImageTransport it;
-	ros::Subscriber bbox_sub;
 	ros::Subscriber caminfo_sub;
 	image_transport::Subscriber image_sub;
 	image_transport::Subscriber imagecolor_sub;
-	ros::Publisher pose_pub;
-	ros::Publisher cake_pub;
-	
 	bool cam_info_received = false;
 	bool image_received = false;
 	CamInfo rs_intrin;
 	cv::Mat depth_image;
 	float point_3d[3];
 	tf::TransformListener _tfListener;
+	std::string camera_frame;
 	
 public:
 	Node():
 		nh("~"), it(nh)
 	{
-		bbox_sub = nh.subscribe("/darknet_ros/bounding_boxes", 1, &Node::Bbox_callback, this);
-		image_sub = it.subscribe("/camera/aligned_depth_to_color/image_raw", 1, &Node::Image_callback, this);
-		imagecolor_sub = it.subscribe("/darknet_ros/detection_image", 1, &Node::Imagecolor_callback, this);
-		caminfo_sub = nh.subscribe("/camera/aligned_depth_to_color/camera_info", 1, &Node::Info_callback, this);
-		pose_pub = nh.advertise<geometry_msgs::PoseStamped>("pose",100);
-		cake_pub = nh.advertise<aruco_msgs::MarkerArray>("cakes",100);
+		image_sub = it.subscribe("/depth_image_topic", 2, &Node::Image_callback, this);
+		imagecolor_sub = it.subscribe("/color_image_topic", 2, &Node::Imagecolor_callback, this);
+		caminfo_sub = nh.subscribe("/camera_info_topic", 2, &Node::Info_callback, this);
+		nh.param<std::string>("camera_frame", camera_frame, "");
 		cv::namedWindow("test");
 		cv::setMouseCallback("test", &Node::mouseCall, this);
 	}
 	
 	cv::Mat color_image;
-
-	void Bbox_callback(const darknet_ros_msgs::BoundingBoxes &msg)
-	{
-		ros::Time curr_stamped = ros::Time::now();
-		auto bboxes = msg.bounding_boxes;
-		int brown_count = 0;
-		int pink_count = 0;
-		int yellow_count = 0;
-		int cake_count = 0;
-		aruco_msgs::MarkerArray cakes;
-		for (std::size_t i = 0; i < bboxes.size(); i++)
-		{
-			if (bboxes[i].id == 0 || bboxes[i].id == 4 || bboxes[i].id == 5 || bboxes[i].id == 1)
-			{
-				float pixel_to_find[2];
-				pixel_to_find[0] = (bboxes[i].xmin + bboxes[i].xmax)/2;
-				pixel_to_find[1] = (bboxes[i].ymin + bboxes[i].ymax)/2;
-				float depth = depth_image.at<float>(pixel_to_find[1], pixel_to_find[0]);
-				//std::cout << depth << std::endl;
-				std::string name;
-				aruco_msgs::Marker marker;
-				marker.id = bboxes[i].id;
-				if (bboxes[i].id == 0)
-				{
-					brown_count++;
-					name = "brown";
-					name.append(std::to_string(brown_count));
-				}
-				else if (bboxes[i].id == 4)
-				{
-					pink_count++;
-					name = "pink";
-					name.append(std::to_string(pink_count));
-				}
-				else if (bboxes[i].id == 5)
-				{
-					yellow_count++;
-					name = "yellow";
-					name.append(std::to_string(yellow_count));
-				}
-				else if (bboxes[i].id == 1)
-				{
-					cake_count++;
-					name = "cake";
-					name.append(std::to_string(cake_count));
-				}
-				else
-					std::cout << "invalid id" << std::endl;
-				
-				if (cam_info_received == true && image_received == true)
-				{
-					rs2_deproject_pixel_to_point(point_3d, rs_intrin, pixel_to_find, depth, name);
-					tf::StampedTransform transformstamped;
-					if (getTransform("world_frame", name, transformstamped))
-					{
-						geometry_msgs::PoseStamped poseMsg;
-						tf::poseTFToMsg(static_cast<tf::Transform>(transformstamped), poseMsg.pose);
-						poseMsg.header.frame_id = "world_frame";
-						poseMsg.header.stamp = curr_stamped;
-						pose_pub.publish(poseMsg);
-						//cake_pub
-						marker.pose.pose = poseMsg.pose;
-						cakes.markers.push_back(marker);				
-					}
-				}
-			}
-			else
-				continue;
-		}
-		if (cam_info_received == true && image_received == true)
-		{
-			cake_pub.publish(cakes);
-		}
-		image_received = false;
-	}
 
 	void Image_callback(const sensor_msgs::ImageConstPtr &msg)
 	{
@@ -168,35 +88,7 @@ public:
 		rs_intrin.coeffs[4] = msg.D[4];
 		rs_intrin.model = RS2_DISTORTION_BROWN_CONRADY;
 		cam_info_received = true;
-	}
-	
-	static void rs2_deproject_pixel_to_point(float point[3], CamInfo intrin, const float pixel[2], float depth, std::string name)
-	{
-		assert(intrin.model != RS2_DISTORTION_MODIFIED_BROWN_CONRADY); // Cannot deproject from a forward-distorted image
-		assert(intrin.model != RS2_DISTORTION_FTHETA); // Cannot deproject to an ftheta image
-		//assert(intrin->model != RS2_DISTORTION_BROWN_CONRADY); // Cannot deproject to an brown conrady model
-
-		float x = (pixel[0] - intrin.ppx) / intrin.fx;
-		float y = (pixel[1] - intrin.ppy) / intrin.fy;
-		if(intrin.model == RS2_DISTORTION_INVERSE_BROWN_CONRADY)
-		{
-		    float r2  = x*x + y*y;
-		    float f = 1 + intrin.coeffs[0]*r2 + intrin.coeffs[1]*r2*r2 + intrin.coeffs[4]*r2*r2*r2;
-		    float ux = x*f + 2*intrin.coeffs[2]*x*y + intrin.coeffs[3]*(r2 + 2*x*x);
-		    float uy = y*f + 2*intrin.coeffs[3]*x*y + intrin.coeffs[2]*(r2 + 2*y*y);
-		    x = ux;
-		    y = uy;
-		}
-		point[0] = depth * x;
-		point[1] = depth * y;
-		point[2] = depth;
-		static tf::TransformBroadcaster br;
-		tf::Transform transform;
-		transform.setOrigin(tf::Vector3(point[0]/1000, point[1]/1000, point[2]/1000));
-		tf::Quaternion q;
-		q.setRPY(0,0,2.36);
-		transform.setRotation(q);
-		br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "camera_color_frame", name));
+		caminfo_sub.shutdown();
 	}
 
 	static void rs2_deproject_pixel_to_point(float point[3], CamInfo intrin, const float pixel[2], float depth)
@@ -263,7 +155,7 @@ public:
 				q.setRPY(0,0,0);
 				transform.setRotation(q);
 				tf::StampedTransform transformstamped;
-				if ( ((Node*)param)->getTransform("world_frame", "camera_color_frame", transformstamped) )
+				if ( ((Node*)param)->getTransform("world_frame", ((Node*)param)->camera_frame, transformstamped) )
 				{
 					transform = static_cast<tf::Transform>(transformstamped) * transform;
 					ROS_INFO("reference to world");
@@ -282,15 +174,15 @@ public:
 
 int main(int argc, char **argv)
 {
-	ros::init(argc, argv, "mklc_node");
+	ros::init(argc, argv, "testdepth");
 	Node node;
 	while(ros::ok())
 	{
 		ros::spinOnce();
 		if( node.color_image.size[0] != 0)
 		{
-			// cv::imshow("test",node.color_image);
-			char k = cv::waitKey(20);
+			cv::imshow("test",node.color_image);
+			char k = cv::waitKey(200);
     		if( k == 'ESC')
         		ros::shutdown();
 		}

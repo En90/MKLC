@@ -42,8 +42,7 @@ class Point
 		float pub_x;
 		float pub_y;
 		bool big_change = false;
-		ros::Time start_time;
-		bool start = false;
+		bool set_up = true;
     
 	public:		
 		float x;
@@ -55,6 +54,8 @@ class Point
 		float new_y = -1;
 		int color_id;
 		int disappeared_count = 0;
+		bool start = false;
+		ros::Time start_time;
 
 		Point(float in_x, float in_y, int in_id, int in_color_id)
 		{
@@ -66,11 +67,11 @@ class Point
 			old_y = in_y;
 			pub_x = in_x;
 			pub_y = in_y;
-			start = false;
+			set_up = true;
 		}
 
 		//  constructor with time
-		Point(float in_x, float in_y, int in_id, int in_color_id, ros::Time begin)
+		Point(float in_x, float in_y, int in_id, int in_color_id, ros::Time begin, float thresh_lowpass, float thresh_send)
 		{
 			x = in_x;
 			y = in_y;
@@ -81,8 +82,9 @@ class Point
 			pub_x = in_x;
 			pub_y = in_y;
 			start_time = begin;
-			start = true;
-			threshold_send = 0.1;	
+			set_up = false;
+			threshold_lowpass = thresh_lowpass;
+			threshold_send = thresh_send;
 		}
 
 		// en add
@@ -151,12 +153,17 @@ class Point
 		{
 			adapt_threshold();
 			double distance = sqrt( pow(pub_x - new_x, 2) + pow(pub_y - new_y, 2) );
-			if(distance > threshold_send || big_change == true)
+			if((distance > threshold_send || big_change == true) && set_up == false)
 			{
 				pub_x = new_x;
 				pub_y = new_y;
 				big_change = false;
 				return true;
+			}
+			else if( set_up == true )
+			{
+				ROS_INFO("not set up yet, not send.");
+				return false;
 			}
 			else
 				return false;
@@ -178,6 +185,7 @@ class Point
 				{
 					ROS_INFO("competition end");
 					start=false;
+					set_up = true;
 				}
 			}
 		}
@@ -200,6 +208,8 @@ class Interface
 		ros::Publisher taste_pub;
 		ros::Publisher obstacle_pub;
 		ros::Subscriber competition_start;
+		ros::Subscriber setup0_sub;
+		ros::Subscriber setup1_sub;
 		ros::Subscriber m_sub1;
 		ros::Subscriber m_sub2;
 		ros::Subscriber m_sub3;
@@ -213,7 +223,6 @@ class Interface
 		std::string sub3;
 		std::string subyolo;
 		std::string subyolo2;
-		float min_dist; //m
 
 		int cherry0 = 1;
 		int cherry1 = 1;
@@ -225,6 +234,16 @@ class Interface
 		std::vector<std::pair<Cake, int>> unify_cake_wait;
 
 		std::vector<Cake> Past_cakes;
+
+		// rosparam
+		float min_dist;
+		float threshold_send;
+		float threshold_lowpass;
+		int disappeared_count_limit;
+		float obstacle_merge_dis;
+		float send_cycle_time;
+		float obstacle_lowpass_ratio;
+		float Ideal_candidate_match_dis;
 
 		// en add
 		void init_idealpoint()
@@ -269,44 +288,44 @@ class Interface
 		}
 
 		// en add: with time
-		void init_idealpoint(const ros::Time& begin)
+		void init_idealpoint(const ros::Time& begin, float& thresh_lowpass, float& thresh_send)
 		{
 			Idealpoint.clear();
 			//1
-			Point point1(1.125, 0.725, 0, 4, begin);
+			Point point1(1.125, 0.725, 0, 4, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point1);
 			//2
-			Point point2(1.125, 1.275, 1, 4, begin);
+			Point point2(1.125, 1.275, 1, 4, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point2);
 			//3
-			Point point3(1.875, 0.725, 2, 4, begin);
+			Point point3(1.875, 0.725, 2, 4, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point3);
 			//4
-			Point point4(1.875, 1.275, 3, 4, begin);
+			Point point4(1.875, 1.275, 3, 4, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point4);
 			//5
-			Point point5(0.775, 0.225, 4, 3, begin);
+			Point point5(0.775, 0.225, 4, 3, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point5);
 			//6
-			Point point6(0.775, 1.775, 5, 3, begin);
+			Point point6(0.775, 1.775, 5, 3, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point6);
 			//7
-			Point point7(2.225, 0.225, 6, 3, begin);
+			Point point7(2.225, 0.225, 6, 3, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point7);
 			//8
-			Point point8(2.225, 1.775, 7, 3, begin);
+			Point point8(2.225, 1.775, 7, 3, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point8);
 			//9
-			Point point9(0.575, 0.225, 8, 2, begin);
+			Point point9(0.575, 0.225, 8, 2, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point9);
 			//10
-			Point point10(0.575, 1.775, 9, 2, begin);
+			Point point10(0.575, 1.775, 9, 2, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point10);
 			//11
-			Point point11(2.425, 0.225, 10, 2, begin);
+			Point point11(2.425, 0.225, 10, 2, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point11);
 			//12
-			Point point12(2.425, 1.775, 11, 2, begin);
+			Point point12(2.425, 1.775, 11, 2, begin, thresh_lowpass, thresh_send);
 			Idealpoint.push_back(point12);
 		}
 
@@ -318,7 +337,7 @@ class Interface
 				for(auto &point : Idealpoint)
 				{
 					point.disappeared_count++;
-					if(point.disappeared_count > 5)
+					if(point.disappeared_count > disappeared_count_limit)
 					{
 						point.new_x = -1;
 						point.new_y = -1;
@@ -362,8 +381,8 @@ class Interface
 				}
 				for(auto &mem : Memories)
 				{
-					// Has not been assigned and is no more than 30 cm away from the ideal point
-					if(!used_Cake.count(mem.second.second) && !used_Idealpoint.count(mem.second.first) && (mem.first < 0.3))
+					// Has not been assigned and is no more than 50cm away from the ideal point
+					if(!used_Cake.count(mem.second.second) && !used_Idealpoint.count(mem.second.first) && (mem.first < Ideal_candidate_match_dis))
 					{
 						Idealpoint[mem.second.first].low_pass_filter(CakeCandidate[mem.second.second].tx, CakeCandidate[mem.second.second].ty);
 						Idealpoint[mem.second.first].disappeared_count = 0;
@@ -378,7 +397,7 @@ class Interface
 					if(!used_Idealpoint.count(i))
 					{
 						Idealpoint[i].disappeared_count++;
-						if(Idealpoint[i].disappeared_count > 2)
+						if(Idealpoint[i].disappeared_count > disappeared_count_limit)
 						{
 							Idealpoint[i].new_x = -1;
 							Idealpoint[i].new_y = -1;
@@ -463,20 +482,29 @@ class Interface
 
 		void obstacle_position()
 		{
-			ROS_INFO("inin");
 			geometry_msgs::PoseArray msgs;
-			std::set<int> used_now;
-			std::set<int> used_past;
-			std::vector<std::pair<double,std::pair<int, int>>> matches; 
+			if(CakeCandidate.size()==0)
+			{
+				//send is empty right now
+				obstacle_pub.publish(msgs);
+				Past_cakes.clear();
+				return;
+			}
 			if(Past_cakes.size()==0)
 			{
+				//Past_cakes is empty and CakeCandidate have cake
 				Past_cakes.assign(CakeCandidate.begin(), CakeCandidate.end());
 				return;
 			}
+			std::set<int> used_now;
+			std::set<int> used_past;
+			std::vector<std::pair<double,std::pair<int, int>>> matches; 
 			for(int i = 0; i < CakeCandidate.size(); i++)
 			{
 				for(int j = 0; j < Past_cakes.size(); j++)
 				{
+					if (CakeCandidate[i].id != Past_cakes[j].id)
+						continue;
 					double distance = sqrt( pow(CakeCandidate[i].tx - Past_cakes[j].tx, 2) + pow(CakeCandidate[i].ty - Past_cakes[j].ty, 2) );
 					std::pair<int, int> counter(i, j);
 					std::pair<double, std::pair<int, int>> Mem(distance, counter);
@@ -497,26 +525,26 @@ class Interface
 						}
 					}
 				}
-			}
-			for(auto &mem : matches)
-			{
-				// Has not been assigned and is no more than 30 cm away from the ideal point
-				if(!used_past.count(mem.second.second) && !used_now.count(mem.second.first) && (mem.first < 0.05))
+				for(auto &mem : matches)
 				{
-					geometry_msgs::Pose temp;
-					temp.position.x = CakeCandidate[mem.second.first].tx*0.5+Past_cakes[mem.second.second].tx*0.5;
-					temp.position.y = CakeCandidate[mem.second.first].ty*0.5+Past_cakes[mem.second.second].ty*0.5;
-					temp.position.z = CakeCandidate[mem.second.first].tz*0.5+Past_cakes[mem.second.second].tz*0.5;
-					temp.orientation.x = 0;
-					temp.orientation.y = 0;
-					temp.orientation.z = 0;
-					temp.orientation.w = 1;
-					msgs.poses.push_back(temp);
-					used_past.insert(mem.second.second);
-					used_now.insert(mem.second.first);
+					// Has not been assigned and is no more than 5 cm away from the ideal point
+					if(!used_past.count(mem.second.second) && !used_now.count(mem.second.first) && (mem.first < obstacle_merge_dis))
+					{
+						geometry_msgs::Pose temp;
+						temp.position.x = CakeCandidate[mem.second.first].tx*0.5+Past_cakes[mem.second.second].tx*0.5;
+						temp.position.y = CakeCandidate[mem.second.first].ty*0.5+Past_cakes[mem.second.second].ty*0.5;
+						temp.position.z = CakeCandidate[mem.second.first].tz*0.5+Past_cakes[mem.second.second].tz*0.5;
+						temp.orientation.x = 0;
+						temp.orientation.y = 0;
+						temp.orientation.z = 0;
+						temp.orientation.w = 1;
+						msgs.poses.push_back(temp);
+						used_past.insert(mem.second.second);
+						used_now.insert(mem.second.first);
+					}
+					else
+						continue;
 				}
-				else
-					continue;
 			}
 			Past_cakes.clear();
 			Past_cakes.assign(CakeCandidate.begin(), CakeCandidate.end());
@@ -527,17 +555,6 @@ class Interface
 		Interface():
 			nh("~")
 		{
-			timer = nh.createTimer(ros::Duration(1.5), &Interface::pub_callback, this);
-			cherry_timer = nh.createTimer(ros::Duration(1), &Interface::cherry_pub_callback, this);
-			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("/cake_node/obstacle_position_array", 10);
-			cherry_pub = nh.advertise<std_msgs::Int32MultiArray>("/cherryExistence", 10);
-			taste_pub = nh.advertise<geometry_msgs::Point>("/adjustCake", 15);
-			obstacle_pub = nh.advertise<geometry_msgs::PoseArray>("/obstacle_position_array", 10);
-			competition_start = nh.subscribe("/startornot", 1, &Interface::start_callback, this);
-			cherry_near_sub = nh.subscribe("/mklc_double/cherry_near", 1, &Interface::near_callback, this);
-			cherry_far_sub = nh.subscribe("/mklc_double/cherry_far", 1, &Interface::far_callback, this);
-			cherry_side_sub = nh.subscribe("/mklc_side/cherry_side", 1, &Interface::side_callback, this);
-			nh.param<float>("min_dist", min_dist, 0.08);
 			if(nh.getParam("sub1_topic", sub1))
 			{
 				m_sub1 = nh.subscribe(sub1, 1, &Interface::sub_callback, this);
@@ -563,13 +580,33 @@ class Interface
 				m_subyolo2 = nh.subscribe(subyolo2, 5, &Interface::sub_callback2, this);
 				std::cout << "init subyolo2" << std::endl;
 			}
+			nh.param<float>("min_dist", min_dist, 0.08);
+			nh.param<float>("threshold_send", threshold_send, 0.05);
+			nh.param<float>("threshold_lowpass", threshold_lowpass, 0.05);
+			nh.param<int>("disappeared_count_limit", disappeared_count_limit, 3);
+			nh.param<float>("obstacle_merge_dis", obstacle_merge_dis, 0.05);
+			nh.param<float>("send_cycle_time", send_cycle_time, 1.5);
+			nh.param<float>("obstacle_lowpass_ratio", obstacle_lowpass_ratio, 0.5);
+			nh.param<float>("Ideal_candidate_match_dis", Ideal_candidate_match_dis, 0.5);
+
+			timer = nh.createTimer(ros::Duration(send_cycle_time), &Interface::pub_callback, this);
+			cherry_timer = nh.createTimer(ros::Duration(1), &Interface::cherry_pub_callback, this);
+			cakes_pub = nh.advertise<geometry_msgs::PoseArray>("/cake_node/obstacle_position_array", 10);
+			cherry_pub = nh.advertise<std_msgs::Int32MultiArray>("/cherryExistence", 10);
+			taste_pub = nh.advertise<geometry_msgs::Point>("/adjustCake", 15);
+			obstacle_pub = nh.advertise<geometry_msgs::PoseArray>("/obstacle_position_array", 10);
+			competition_start = nh.subscribe("/startornot", 1, &Interface::start_callback, this);
+			setup1_sub = nh.subscribe("/allSetUp1", 1, &Interface::setup_callback, this);
+			setup0_sub = nh.subscribe("/allSetUp0", 1, &Interface::setup_callback, this);
+			cherry_near_sub = nh.subscribe("/mklc_double/cherry_near", 1, &Interface::near_callback, this);
+			cherry_far_sub = nh.subscribe("/mklc_double/cherry_far", 1, &Interface::far_callback, this);
+			cherry_side_sub = nh.subscribe("/mklc_side/cherry_side", 1, &Interface::side_callback, this);
 			// en add: init Idealpoint
 			init_idealpoint();
 		}
 
 		void sub_callback(const aruco_msgs::MarkerArray &msg)
 		{
-			//geometry_msgs::PoseArray msg_send;
 			for (std::size_t i=0; i < msg.markers.size(); i++)
 			{
 				if((msg.markers[i].id == 1)||(msg.markers[i].id == 2)||(msg.markers[i].id == 3))
@@ -585,16 +622,12 @@ class Interface
 					cake.rw = msg.markers[i].pose.pose.orientation.w;
 					cake.stamp = ros::Time::now();
 					CakeCandidate.push_back(cake);
-					//update_unify(cake, msg.header.stamp.toSec(), msg_send);
 				}
 			}
-			//if(msg_send.poses.size()!=0)
-			//	obstacle_pub.publish(msg_send);
 		}
 
 		void sub_callback2(const aruco_msgs::MarkerArray &msg)
 		{
-			//geometry_msgs::PoseArray msg_send;
 			for (std::size_t i=0; i < msg.markers.size(); i++)
 			{
 				Cake cake;
@@ -608,10 +641,7 @@ class Interface
 				cake.rw = msg.markers[i].pose.pose.orientation.w;
 				cake.stamp = ros::Time::now();
 				CakeCandidate.push_back(cake);
-				//update_unify(cake, msg.header.stamp.toSec(), msg_send);
 			}
-			//if(msg_send.poses.size()!=0)
-			//	obstacle_pub.publish(msg_send);
 		}
 
 		void pub_callback(const ros::TimerEvent& event)
@@ -649,10 +679,11 @@ class Interface
 					geometry_msgs::Pose p;
 					p.position.x = CakeCandidate.at(i).tx;
 					p.position.y = CakeCandidate.at(i).ty;
-					p.position.z = CakeCandidate.at(i).tz;
-					// if legendary recipe, z is 1;
-					if( CakeCandidate.at(i).id == 0 )
-						p.position.z = 1;
+					p.position.z = CakeCandidate.at(i).id;
+					// p.position.z = CakeCandidate.at(i).tz;
+					// // if legendary recipe, z is 1;
+					// if( CakeCandidate.at(i).id == 1 )
+					// 	p.position.z = 1;
 					p.orientation.x = CakeCandidate.at(i).rx;
 					p.orientation.y = CakeCandidate.at(i).ry;
 					p.orientation.z = CakeCandidate.at(i).rz;
@@ -738,7 +769,20 @@ class Interface
 			if(msg.data == true)
 			{
 				ROS_INFO("start competision");
-				init_idealpoint(ros::Time::now());
+				for(auto& point : Idealpoint)
+				{
+					point.start = true;
+					point.start_time = ros::Time::now();
+				}
+			}
+		}
+
+		void setup_callback(const std_msgs::Bool &msg)
+		{
+			if(msg.data == false)
+			{
+				ROS_INFO("all set up, send cake status");
+				init_idealpoint(ros::Time::now(), threshold_lowpass, threshold_send);
 			}
 		}
 };

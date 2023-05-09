@@ -4,5 +4,5 @@
   <include file="$(find darknet_ros)/launch/yolo-fastest-far.launch" />
   <include file="$(find mklc)/launch/mklc_double.launch" />
   <include file="$(find aruco_ros)/launch/try_double.launch" />
-  <!-- <include file="$(find mklc)/launch/cake.launch" /> -->
+  <include file="$(find mklc)/launch/cake.launch" />
 </launch>
