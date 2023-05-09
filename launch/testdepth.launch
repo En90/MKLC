@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<launch>
+	<arg name="cam_id" default="3"/>
+	<group if="$(eval arg('cam_id') ==1)">
+  		<node pkg="mklc" type="testdepth" name="testdepth" output="screen">
+    		<remap from="depth_image_topic" to="/camera1/aligned_depth_to_color/image_raw"/>
+    		<remap from="color_image_topic" to="/darknet_ros/detection_image"/>
+    		<remap from="camera_info_topic" to="/camera1/aligned_depth_to_color/camera_info"/>
+    		<param name="camera_frame" value="camera_color_frame_1"/>
+  		</node>
+  	</group>
+  
+  	<group if="$(eval arg('cam_id') ==2)">
+  		<node pkg="mklc" type="testdepth" name="testdepth" output="screen">
+    		<remap from="depth_image_topic" to="/camera2/aligned_depth_to_color/image_raw"/>
+    		<remap from="color_image_topic" to="/openvino/result"/>
+    		<remap from="camera_info_topic" to="/camera2/aligned_depth_to_color/camera_info"/>
+    		<param name="camera_frame" value="camera_color_frame_2"/>
+  		</node>
+  	</group>
+  
+  	<group if="$(eval arg('cam_id') ==3)">
+  		<node pkg="mklc" type="testdepth" name="testdepth" output="screen">
+    		<remap from="depth_image_topic" to="/camera3/aligned_depth_to_color/image_raw"/>
+    		<remap from="color_image_topic" to="/camera3/darknet_ros/detection_image"/>
+    		<remap from="camera_info_topic" to="/camera3/aligned_depth_to_color/camera_info"/>
+    		<param name="camera_frame" value="camera_color_frame_3"/>
+  		</node>
+  	</group>
+</launch>
